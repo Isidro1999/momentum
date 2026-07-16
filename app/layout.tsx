@@ -1,8 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { DailyReviewProvider } from "@/providers/daily-review-provider";
-import { GoalProvider } from "@/providers/goal-provider";
-import { TaskProvider } from "@/providers/task-provider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -31,13 +28,7 @@ export default function RootLayout({
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full font-sans">
-        <TaskProvider>
-          <GoalProvider>
-            <DailyReviewProvider>{children}</DailyReviewProvider>
-          </GoalProvider>
-        </TaskProvider>
-      </body>
+      <body className="min-h-full font-sans">{children}</body>
     </html>
   );
 }

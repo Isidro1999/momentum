@@ -8,7 +8,6 @@ import { GoalProgress } from "@/components/today/goal-progress";
 import { NextEvent } from "@/components/today/next-event";
 import { TaskList } from "@/components/today/task-list";
 import { WellbeingCard } from "@/components/today/wellbeing-card";
-import { todayData } from "@/data/mock-data";
 import { useDailyReviews } from "@/hooks/use-daily-reviews";
 import { useGoals } from "@/hooks/use-goals";
 import { useTasks } from "@/hooks/use-tasks";
@@ -18,7 +17,11 @@ import type { GoalProgressItem } from "@/types";
 
 const PRIORITY_ORDER = { alta: 0, media: 1, baja: 2 } as const;
 
-export function TodayPageContent() {
+interface TodayPageContentProps {
+  userName: string;
+}
+
+export function TodayPageContent({ userName }: TodayPageContentProps) {
   const { tasks, isReady: tasksReady, openCreateForm } = useTasks();
   const { goals, milestones, isReady: goalsReady } = useGoals();
   const {
@@ -26,7 +29,6 @@ export function TodayPageContent() {
     isReady: reviewsReady,
     openCloseForm,
   } = useDailyReviews();
-  const { userName } = todayData;
   const today = getTodayDateString();
   const todayReview = getByDate(today) ?? null;
 

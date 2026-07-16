@@ -12,6 +12,7 @@ import {
   TrendingUp,
   type LucideIcon,
 } from "lucide-react";
+import { LogoutButton } from "@/components/layout/logout-button";
 import { navItems } from "@/data/mock-data";
 
 const iconMap: Record<string, LucideIcon> = {
@@ -36,7 +37,11 @@ function isActivePath(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function AppSidebar() {
+interface AppSidebarProps {
+  userName: string;
+}
+
+export function AppSidebar({ userName }: AppSidebarProps) {
   const pathname = usePathname();
 
   return (
@@ -97,13 +102,17 @@ export function AppSidebar() {
         </div>
       </nav>
 
-      <div className="shrink-0 border-t border-slate-100 px-4 py-4">
+      <div className="shrink-0 space-y-3 border-t border-slate-100 px-4 py-4">
         <div className="rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-3">
-          <p className="text-xs font-medium text-slate-500">Sesión local</p>
-          <p className="mt-0.5 text-sm leading-snug text-slate-700">
-            Datos en este dispositivo
+          <p className="text-xs font-medium text-slate-500">Sesión</p>
+          <p className="mt-0.5 truncate text-sm font-medium leading-snug text-slate-800">
+            {userName}
+          </p>
+          <p className="mt-1 text-xs leading-snug text-slate-500">
+            Datos todavía en este dispositivo
           </p>
         </div>
+        <LogoutButton />
       </div>
     </aside>
   );
