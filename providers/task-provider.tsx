@@ -9,19 +9,22 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { getSeedTasks } from "@/data/mock-data";
-import { loadTasksFromStorage, saveTasksToStorage } from "@/lib/task-storage";
+import { toUserFacingError } from "@/lib/repositories/errors";
+import * as taskRepository from "@/lib/repositories/task-repository";
+import { useCategories } from "@/providers/category-provider";
 import type { Task, TaskInput, TaskStatus } from "@/types";
 
 interface TaskContextValue {
   tasks: Task[];
+  loading: boolean;
+  error: string | null;
   isReady: boolean;
-  storageCorrupt: boolean;
-  recoverStorage: () => void;
-  createTask: (input: TaskInput) => Task;
-  updateTask: (id: string, input: TaskInput) => void;
-  setTaskStatus: (id: string, status: TaskStatus) => void;
-  deleteTask: (id: string) => void;
+  retry: () => void;
+  refresh: () => Promise<void>;
+  createTask: (input: TaskInput) => Promise<Task>;
+  updateTask: (id: string, input: TaskInput) => Promise<void>;
+  setTaskStatus: (id: string, status: TaskStatus) => Promise<void>;
+  deleteTask: (id: string) => Promise<void>;
   unlinkGoalFromTasks: (goalId: string) => void;
   isFormOpen: boolean;
   editingTask: Task | null;
@@ -32,123 +35,101 @@ interface TaskContextValue {
 
 const TaskContext = createContext<TaskContextValue | null>(null);
 
-function createId(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-
-  return `task-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
 interface TaskProviderProps {
   children: ReactNode;
 }
 
 export function TaskProvider({ children }: TaskProviderProps) {
+  const {
+    categories,
+    isReady: categoriesReady,
+    error: categoriesError,
+  } = useCategories();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [isReady, setIsReady] = useState(false);
-  const [canPersist, setCanPersist] = useState(false);
-  const [storageCorrupt, setStorageCorrupt] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
-  useEffect(() => {
-    const stored = loadTasksFromStorage();
-
-    if (stored.status === "missing") {
-      const seed = getSeedTasks();
-      setTasks(seed);
-      saveTasksToStorage(seed);
-      setCanPersist(true);
-      setStorageCorrupt(false);
-    } else if (stored.status === "corrupt") {
-      setTasks([]);
-      setCanPersist(false);
-      setStorageCorrupt(true);
-    } else {
-      setTasks(stored.data);
-      setCanPersist(true);
-      setStorageCorrupt(false);
-    }
-
-    setIsReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isReady || !canPersist) {
+  const loadTasks = useCallback(async () => {
+    if (!categoriesReady) {
       return;
     }
 
-    saveTasksToStorage(tasks);
-  }, [tasks, isReady, canPersist]);
+    setLoading(true);
+    setError(null);
 
-  const recoverStorage = useCallback(() => {
-    const seed = getSeedTasks();
-    setTasks(seed);
-    saveTasksToStorage(seed);
-    setCanPersist(true);
-    setStorageCorrupt(false);
+    try {
+      const data = await taskRepository.listTasks(categories);
+      setTasks(data);
+    } catch (loadError) {
+      setTasks([]);
+      setError(toUserFacingError(loadError));
+    } finally {
+      setLoading(false);
+    }
+  }, [categories, categoriesReady]);
+
+  useEffect(() => {
+    if (categoriesError) {
+      setTasks([]);
+      setLoading(false);
+      setError(categoriesError);
+      return;
+    }
+
+    if (!categoriesReady) {
+      setLoading(true);
+      return;
+    }
+
+    void loadTasks();
+  }, [categoriesReady, categoriesError, loadTasks, reloadKey]);
+
+  const retry = useCallback(() => {
+    setReloadKey((current) => current + 1);
   }, []);
 
-  const createTask = useCallback((input: TaskInput): Task => {
-    const now = new Date().toISOString();
-    const task: Task = {
-      id: createId(),
-      title: input.title.trim(),
-      description: input.description?.trim() || undefined,
-      category: input.category,
-      date: input.date,
-      startTime: input.startTime || undefined,
-      estimatedMinutes: input.estimatedMinutes,
-      priority: input.priority,
-      status: "pendiente",
-      goalId: input.goalId || undefined,
-      createdAt: now,
-    };
+  const refresh = useCallback(async () => {
+    await loadTasks();
+  }, [loadTasks]);
 
-    setTasks((current) => [task, ...current]);
-    return task;
-  }, []);
+  const createTask = useCallback(
+    async (input: TaskInput): Promise<Task> => {
+      const created = await taskRepository.createTask(input, categories);
+      setTasks((current) => [created, ...current]);
+      return created;
+    },
+    [categories],
+  );
 
-  const updateTask = useCallback((id: string, input: TaskInput) => {
-    setTasks((current) =>
-      current.map((task) =>
-        task.id === id
-          ? {
-              ...task,
-              title: input.title.trim(),
-              description: input.description?.trim() || undefined,
-              category: input.category,
-              date: input.date,
-              startTime: input.startTime || undefined,
-              estimatedMinutes: input.estimatedMinutes,
-              priority: input.priority,
-              goalId: input.goalId || undefined,
-            }
-          : task,
-      ),
-    );
-  }, []);
+  const updateTask = useCallback(
+    async (id: string, input: TaskInput) => {
+      const updated = await taskRepository.updateTask(id, input, categories);
+      setTasks((current) =>
+        current.map((task) => (task.id === id ? updated : task)),
+      );
+    },
+    [categories],
+  );
 
-  const setTaskStatus = useCallback((id: string, status: TaskStatus) => {
-    const now = new Date().toISOString();
+  const setTaskStatus = useCallback(
+    async (id: string, status: TaskStatus) => {
+      const updated = await taskRepository.setTaskStatus(
+        id,
+        status,
+        categories,
+      );
+      setTasks((current) =>
+        current.map((task) => (task.id === id ? updated : task)),
+      );
+    },
+    [categories],
+  );
 
-    setTasks((current) =>
-      current.map((task) => {
-        if (task.id !== id) {
-          return task;
-        }
-
-        return {
-          ...task,
-          status,
-          completedAt: status === "completada" ? now : undefined,
-        };
-      }),
-    );
-  }, []);
-
-  const deleteTask = useCallback((id: string) => {
+  const deleteTask = useCallback(async (id: string) => {
+    await taskRepository.deleteTask(id);
     setTasks((current) => current.filter((task) => task.id !== id));
   }, []);
 
@@ -178,9 +159,11 @@ export function TaskProvider({ children }: TaskProviderProps) {
   const value = useMemo(
     () => ({
       tasks,
-      isReady,
-      storageCorrupt,
-      recoverStorage,
+      loading,
+      error,
+      isReady: !loading && error === null,
+      retry,
+      refresh,
       createTask,
       updateTask,
       setTaskStatus,
@@ -194,9 +177,10 @@ export function TaskProvider({ children }: TaskProviderProps) {
     }),
     [
       tasks,
-      isReady,
-      storageCorrupt,
-      recoverStorage,
+      loading,
+      error,
+      retry,
+      refresh,
       createTask,
       updateTask,
       setTaskStatus,

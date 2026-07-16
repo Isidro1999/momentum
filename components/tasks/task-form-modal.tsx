@@ -112,7 +112,7 @@ export function TaskFormModal() {
     return nextErrors;
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (isSubmitting) {
       return;
@@ -145,13 +145,18 @@ export function TaskFormModal() {
       goalId: form.goalId || undefined,
     };
 
-    if (editingTask) {
-      updateTask(editingTask.id, input);
-    } else {
-      createTask(input);
+    try {
+      if (editingTask) {
+        await updateTask(editingTask.id, input);
+      } else {
+        await createTask(input);
+      }
+      closeForm();
+    } catch {
+      // El provider mantiene el estado; el usuario puede reintentar.
+    } finally {
+      setIsSubmitting(false);
     }
-
-    closeForm();
   }
 
   const isEditing = Boolean(editingTask);

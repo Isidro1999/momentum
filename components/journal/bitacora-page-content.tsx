@@ -113,7 +113,7 @@ export function BitacoraPageContent() {
     );
 
     if (confirmed) {
-      deleteReview(review.id);
+      void deleteReview(review.id);
     }
   }
 

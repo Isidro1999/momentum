@@ -127,7 +127,7 @@ export function GoalFormModal() {
     return nextErrors;
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (isSubmitting) {
       return;
@@ -154,13 +154,18 @@ export function GoalFormModal() {
           : undefined,
     };
 
-    if (editingGoal) {
-      updateGoal(editingGoal.id, input);
-    } else {
-      createGoal(input);
+    try {
+      if (editingGoal) {
+        await updateGoal(editingGoal.id, input);
+      } else {
+        await createGoal(input);
+      }
+      closeForm();
+    } catch {
+      // El usuario puede reintentar.
+    } finally {
+      setIsSubmitting(false);
     }
-
-    closeForm();
   }
 
   const isEditing = Boolean(editingGoal);

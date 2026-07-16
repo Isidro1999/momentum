@@ -178,9 +178,9 @@ export function GoalDetailContent() {
     };
 
     if (editingMilestone) {
-      updateMilestone(editingMilestone.id, input);
+      void updateMilestone(editingMilestone.id, input);
     } else {
-      createMilestone(currentGoal.id, input);
+      void createMilestone(currentGoal.id, input);
     }
 
     closeMilestoneForm();
@@ -195,9 +195,10 @@ export function GoalDetailContent() {
       return;
     }
 
-    deleteGoal(currentGoal.id);
-    unlinkGoalFromTasks(currentGoal.id);
-    router.push("/objetivos");
+    void deleteGoal(currentGoal.id).then(() => {
+      unlinkGoalFromTasks(currentGoal.id);
+      router.push("/objetivos");
+    });
   }
 
   function handleDeleteMilestone(milestone: Milestone) {
@@ -206,7 +207,7 @@ export function GoalDetailContent() {
     );
 
     if (confirmed) {
-      deleteMilestone(milestone.id);
+      void deleteMilestone(milestone.id);
     }
   }
 
@@ -290,7 +291,7 @@ export function GoalDetailContent() {
           {currentGoal.status === "activo" ? (
             <button
               type="button"
-              onClick={() => setGoalStatus(currentGoal.id, "pausado")}
+              onClick={() => void setGoalStatus(currentGoal.id, "pausado")}
               className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
             >
               Pausar
@@ -299,7 +300,7 @@ export function GoalDetailContent() {
           {currentGoal.status === "pausado" ? (
             <button
               type="button"
-              onClick={() => setGoalStatus(currentGoal.id, "activo")}
+              onClick={() => void setGoalStatus(currentGoal.id, "activo")}
               className="rounded-lg bg-teal-50 px-2.5 py-1.5 text-xs font-medium text-teal-800 hover:bg-teal-100"
             >
               Reactivar
@@ -313,7 +314,7 @@ export function GoalDetailContent() {
                   `¿Marcar “${currentGoal.title}” como completado?`,
                 );
                 if (confirmed) {
-                  setGoalStatus(currentGoal.id, "completado");
+                  void setGoalStatus(currentGoal.id, "completado");
                 }
               }}
               className="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
@@ -330,7 +331,7 @@ export function GoalDetailContent() {
                   `¿Cancelar el objetivo “${currentGoal.title}”?`,
                 );
                 if (confirmed) {
-                  setGoalStatus(currentGoal.id, "cancelado");
+                  void setGoalStatus(currentGoal.id, "cancelado");
                 }
               }}
               className="rounded-lg bg-rose-50 px-2.5 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100"
@@ -381,7 +382,7 @@ export function GoalDetailContent() {
                 <div className="flex items-start gap-3">
                   <button
                     type="button"
-                    onClick={() => toggleMilestone(milestone.id)}
+                    onClick={() => void toggleMilestone(milestone.id)}
                     className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full ${
                       milestone.completed
                         ? "bg-emerald-50 text-emerald-700"
@@ -427,7 +428,7 @@ export function GoalDetailContent() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => moveMilestone(milestone.id, "up")}
+                        onClick={() => void moveMilestone(milestone.id, "up")}
                         disabled={index === 0}
                         className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-slate-600 hover:bg-white disabled:opacity-40"
                       >
@@ -436,7 +437,7 @@ export function GoalDetailContent() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => moveMilestone(milestone.id, "down")}
+                        onClick={() => void moveMilestone(milestone.id, "down")}
                         disabled={index === milestones.length - 1}
                         className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-slate-600 hover:bg-white disabled:opacity-40"
                       >

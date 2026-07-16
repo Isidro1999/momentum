@@ -3,7 +3,8 @@ import type { ReactNode } from "react";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { LogoutButton } from "@/components/layout/logout-button";
 import { MobileNavigation } from "@/components/layout/mobile-navigation";
-import { StorageRecoveryBanner } from "@/components/layout/storage-recovery-banner";
+import { DataErrorBanner } from "@/components/layout/data-error-banner";
+import { LocalMigrationBanner } from "@/components/layout/local-migration-banner";
 import { GoalFormModal } from "@/components/goals/goal-form-modal";
 import { DailyReviewFormModal } from "@/components/journal/daily-review-form-modal";
 import { TaskFormModal } from "@/components/tasks/task-form-modal";
@@ -30,7 +31,8 @@ export function AppShell({ children, userName }: AppShellProps) {
             </div>
             <LogoutButton compact />
           </div>
-          <StorageRecoveryBanner />
+          <DataErrorBanner />
+          <LocalMigrationBanner />
           {children}
         </main>
       </div>

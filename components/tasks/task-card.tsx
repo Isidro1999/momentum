@@ -54,7 +54,7 @@ export function TaskCard({ task }: TaskCardProps) {
     );
 
     if (confirmed) {
-      deleteTask(task.id);
+      void deleteTask(task.id);
     }
   }
 
@@ -116,7 +116,7 @@ export function TaskCard({ task }: TaskCardProps) {
             {task.status !== "completada" && task.status !== "cancelada" ? (
               <button
                 type="button"
-                onClick={() => setTaskStatus(task.id, "completada")}
+                onClick={() => void setTaskStatus(task.id, "completada")}
                 className="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
               >
                 Completar
@@ -124,7 +124,7 @@ export function TaskCard({ task }: TaskCardProps) {
             ) : task.status === "completada" ? (
               <button
                 type="button"
-                onClick={() => setTaskStatus(task.id, "pendiente")}
+                onClick={() => void setTaskStatus(task.id, "pendiente")}
                 className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200"
               >
                 Volver a pendiente
@@ -136,7 +136,7 @@ export function TaskCard({ task }: TaskCardProps) {
             task.status !== "cancelada" ? (
               <button
                 type="button"
-                onClick={() => setTaskStatus(task.id, "en_progreso")}
+                onClick={() => void setTaskStatus(task.id, "en_progreso")}
                 className="rounded-lg bg-sky-50 px-2.5 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-100"
               >
                 En progreso
@@ -148,7 +148,7 @@ export function TaskCard({ task }: TaskCardProps) {
             task.status !== "cancelada" ? (
               <button
                 type="button"
-                onClick={() => setTaskStatus(task.id, "postergada")}
+                onClick={() => void setTaskStatus(task.id, "postergada")}
                 className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
               >
                 Postergar
@@ -163,7 +163,7 @@ export function TaskCard({ task }: TaskCardProps) {
                     `¿Cancelar la tarea “${task.title}”?`,
                   );
                   if (confirmed) {
-                    setTaskStatus(task.id, "cancelada");
+                    void setTaskStatus(task.id, "cancelada");
                   }
                 }}
                 className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-200"
@@ -175,7 +175,7 @@ export function TaskCard({ task }: TaskCardProps) {
             {task.status === "cancelada" ? (
               <button
                 type="button"
-                onClick={() => setTaskStatus(task.id, "pendiente")}
+                onClick={() => void setTaskStatus(task.id, "pendiente")}
                 className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200"
               >
                 Reactivar

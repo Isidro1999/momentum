@@ -265,7 +265,7 @@ export function DailyReviewFormModal() {
     return next;
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (isSubmitting) {
       return;
@@ -303,8 +303,14 @@ export function DailyReviewFormModal() {
       notes: form.notes.trim() || undefined,
     };
 
-    upsertReview(input);
-    closeForm();
+    try {
+      await upsertReview(input);
+      closeForm();
+    } catch {
+      // El usuario puede reintentar.
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (

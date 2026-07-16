@@ -9,8 +9,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { getSeedGoals } from "@/data/mock-data";
-import { loadGoalsFromStorage, saveGoalsToStorage } from "@/lib/goal-storage";
+import { toUserFacingError } from "@/lib/repositories/errors";
+import * as goalRepository from "@/lib/repositories/goal-repository";
+import * as milestoneRepository from "@/lib/repositories/milestone-repository";
+import { useCategories } from "@/providers/category-provider";
 import type {
   Goal,
   GoalInput,
@@ -22,21 +24,26 @@ import type {
 interface GoalContextValue {
   goals: Goal[];
   milestones: Milestone[];
+  loading: boolean;
+  error: string | null;
   isReady: boolean;
-  storageCorrupt: boolean;
-  recoverStorage: () => void;
-  createGoal: (input: GoalInput) => Goal;
-  updateGoal: (id: string, input: GoalInput) => void;
-  setGoalStatus: (id: string, status: GoalStatus) => void;
-  deleteGoal: (id: string) => void;
-  createMilestone: (goalId: string, input: MilestoneInput) => Milestone;
+  retry: () => void;
+  refresh: () => Promise<void>;
+  createGoal: (input: GoalInput) => Promise<Goal>;
+  updateGoal: (id: string, input: GoalInput) => Promise<void>;
+  setGoalStatus: (id: string, status: GoalStatus) => Promise<void>;
+  deleteGoal: (id: string) => Promise<void>;
+  createMilestone: (
+    goalId: string,
+    input: MilestoneInput,
+  ) => Promise<Milestone>;
   updateMilestone: (
     id: string,
     input: MilestoneInput & { completed?: boolean },
-  ) => void;
-  toggleMilestone: (id: string) => void;
-  deleteMilestone: (id: string) => void;
-  moveMilestone: (id: string, direction: "up" | "down") => void;
+  ) => Promise<void>;
+  toggleMilestone: (id: string) => Promise<void>;
+  deleteMilestone: (id: string) => Promise<void>;
+  moveMilestone: (id: string, direction: "up" | "down") => Promise<void>;
   getGoalById: (id: string) => Goal | undefined;
   getMilestonesByGoalId: (goalId: string) => Milestone[];
   isFormOpen: boolean;
@@ -48,130 +55,108 @@ interface GoalContextValue {
 
 const GoalContext = createContext<GoalContextValue | null>(null);
 
-function createId(prefix: string): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return `${prefix}-${crypto.randomUUID()}`;
-  }
-
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
 interface GoalProviderProps {
   children: ReactNode;
 }
 
 export function GoalProvider({ children }: GoalProviderProps) {
+  const {
+    categories,
+    isReady: categoriesReady,
+    error: categoriesError,
+  } = useCategories();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
-  const [isReady, setIsReady] = useState(false);
-  const [canPersist, setCanPersist] = useState(false);
-  const [storageCorrupt, setStorageCorrupt] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
 
-  useEffect(() => {
-    const stored = loadGoalsFromStorage();
-
-    if (stored.status === "missing") {
-      const seed = getSeedGoals();
-      setGoals(seed.goals);
-      setMilestones(seed.milestones);
-      saveGoalsToStorage(seed);
-      setCanPersist(true);
-      setStorageCorrupt(false);
-    } else if (stored.status === "corrupt") {
-      setGoals([]);
-      setMilestones([]);
-      setCanPersist(false);
-      setStorageCorrupt(true);
-    } else {
-      setGoals(stored.data.goals);
-      setMilestones(stored.data.milestones);
-      setCanPersist(true);
-      setStorageCorrupt(false);
-    }
-
-    setIsReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isReady || !canPersist) {
+  const loadGoals = useCallback(async () => {
+    if (!categoriesReady) {
       return;
     }
 
-    saveGoalsToStorage({ goals, milestones });
-  }, [goals, milestones, isReady, canPersist]);
+    setLoading(true);
+    setError(null);
 
-  const recoverStorage = useCallback(() => {
-    const seed = getSeedGoals();
-    setGoals(seed.goals);
-    setMilestones(seed.milestones);
-    saveGoalsToStorage(seed);
-    setCanPersist(true);
-    setStorageCorrupt(false);
+    try {
+      const [goalData, milestoneData] = await Promise.all([
+        goalRepository.listGoals(categories),
+        milestoneRepository.listMilestones(),
+      ]);
+      setGoals(goalData);
+      setMilestones(milestoneData);
+    } catch (loadError) {
+      setGoals([]);
+      setMilestones([]);
+      setError(toUserFacingError(loadError));
+    } finally {
+      setLoading(false);
+    }
+  }, [categories, categoriesReady]);
+
+  useEffect(() => {
+    if (categoriesError) {
+      setGoals([]);
+      setMilestones([]);
+      setLoading(false);
+      setError(categoriesError);
+      return;
+    }
+
+    if (!categoriesReady) {
+      setLoading(true);
+      return;
+    }
+
+    void loadGoals();
+  }, [categoriesReady, categoriesError, loadGoals, reloadKey]);
+
+  const retry = useCallback(() => {
+    setReloadKey((current) => current + 1);
   }, []);
 
-  const createGoal = useCallback((input: GoalInput): Goal => {
-    const now = new Date().toISOString();
-    const goal: Goal = {
-      id: createId("goal"),
-      title: input.title.trim(),
-      description: input.description?.trim() || undefined,
-      category: input.category,
-      startDate: input.startDate,
-      targetDate: input.targetDate || undefined,
-      status: "activo",
-      progressMode: input.progressMode,
-      manualProgress:
-        input.progressMode === "manual" ? (input.manualProgress ?? 0) : undefined,
-      createdAt: now,
-    };
+  const refresh = useCallback(async () => {
+    await loadGoals();
+  }, [loadGoals]);
 
-    setGoals((current) => [goal, ...current]);
-    return goal;
-  }, []);
+  const createGoal = useCallback(
+    async (input: GoalInput): Promise<Goal> => {
+      const created = await goalRepository.createGoal(input, categories);
+      setGoals((current) => [created, ...current]);
+      return created;
+    },
+    [categories],
+  );
 
-  const updateGoal = useCallback((id: string, input: GoalInput) => {
-    setGoals((current) =>
-      current.map((goal) =>
-        goal.id === id
-          ? {
-              ...goal,
-              title: input.title.trim(),
-              description: input.description?.trim() || undefined,
-              category: input.category,
-              startDate: input.startDate,
-              targetDate: input.targetDate || undefined,
-              progressMode: input.progressMode,
-              manualProgress:
-                input.progressMode === "manual"
-                  ? (input.manualProgress ?? 0)
-                  : undefined,
-            }
-          : goal,
-      ),
-    );
-  }, []);
+  const updateGoal = useCallback(
+    async (id: string, input: GoalInput) => {
+      const updated = await goalRepository.updateGoal(id, input, categories);
+      setGoals((current) =>
+        current.map((goal) => (goal.id === id ? updated : goal)),
+      );
+    },
+    [categories],
+  );
 
-  const setGoalStatus = useCallback((id: string, status: GoalStatus) => {
-    const now = new Date().toISOString();
+  const setGoalStatus = useCallback(
+    async (id: string, status: GoalStatus) => {
+      const updated = await goalRepository.setGoalStatus(
+        id,
+        status,
+        categories,
+      );
+      setGoals((current) =>
+        current.map((goal) => (goal.id === id ? updated : goal)),
+      );
+    },
+    [categories],
+  );
 
-    setGoals((current) =>
-      current.map((goal) => {
-        if (goal.id !== id) {
-          return goal;
-        }
-
-        return {
-          ...goal,
-          status,
-          completedAt: status === "completado" ? now : undefined,
-        };
-      }),
-    );
-  }, []);
-
-  const deleteGoal = useCallback((id: string) => {
+  const deleteGoal = useCallback(async (id: string) => {
+    await goalRepository.deleteGoal(id);
     setGoals((current) => current.filter((goal) => goal.id !== id));
     setMilestones((current) =>
       current.filter((milestone) => milestone.goalId !== id),
@@ -179,7 +164,7 @@ export function GoalProvider({ children }: GoalProviderProps) {
   }, []);
 
   const createMilestone = useCallback(
-    (goalId: string, input: MilestoneInput): Milestone => {
+    async (goalId: string, input: MilestoneInput): Promise<Milestone> => {
       const siblings = milestones.filter(
         (milestone) => milestone.goalId === goalId,
       );
@@ -188,16 +173,11 @@ export function GoalProvider({ children }: GoalProviderProps) {
           ? 0
           : Math.max(...siblings.map((milestone) => milestone.position)) + 1;
 
-      const created: Milestone = {
-        id: createId("ms"),
+      const created = await milestoneRepository.createMilestone(
         goalId,
-        title: input.title.trim(),
-        description: input.description?.trim() || undefined,
-        completed: false,
-        targetDate: input.targetDate || undefined,
-        position: nextPosition,
-      };
-
+        input,
+        nextPosition,
+      );
       setMilestones((current) => [...current, created]);
       return created;
     },
@@ -205,67 +185,39 @@ export function GoalProvider({ children }: GoalProviderProps) {
   );
 
   const updateMilestone = useCallback(
-    (id: string, input: MilestoneInput & { completed?: boolean }) => {
-      const now = new Date().toISOString();
-
+    async (id: string, input: MilestoneInput & { completed?: boolean }) => {
+      const updated = await milestoneRepository.updateMilestone(id, input);
       setMilestones((current) =>
-        current.map((milestone) => {
-          if (milestone.id !== id) {
-            return milestone;
-          }
-
-          const completed = input.completed ?? milestone.completed;
-
-          return {
-            ...milestone,
-            title: input.title.trim(),
-            description: input.description?.trim() || undefined,
-            targetDate: input.targetDate || undefined,
-            completed,
-            completedAt: completed
-              ? milestone.completedAt ?? now
-              : undefined,
-          };
-        }),
+        current.map((milestone) =>
+          milestone.id === id ? updated : milestone,
+        ),
       );
     },
     [],
   );
 
-  const toggleMilestone = useCallback((id: string) => {
-    const now = new Date().toISOString();
-
+  const toggleMilestone = useCallback(async (id: string) => {
+    const updated = await milestoneRepository.toggleMilestone(id);
     setMilestones((current) =>
-      current.map((milestone) => {
-        if (milestone.id !== id) {
-          return milestone;
-        }
-
-        const completed = !milestone.completed;
-
-        return {
-          ...milestone,
-          completed,
-          completedAt: completed ? now : undefined,
-        };
-      }),
+      current.map((milestone) => (milestone.id === id ? updated : milestone)),
     );
   }, []);
 
-  const deleteMilestone = useCallback((id: string) => {
+  const deleteMilestone = useCallback(async (id: string) => {
+    await milestoneRepository.deleteMilestone(id);
     setMilestones((current) =>
       current.filter((milestone) => milestone.id !== id),
     );
   }, []);
 
-  const moveMilestone = useCallback((id: string, direction: "up" | "down") => {
-    setMilestones((current) => {
-      const milestone = current.find((item) => item.id === id);
+  const moveMilestone = useCallback(
+    async (id: string, direction: "up" | "down") => {
+      const milestone = milestones.find((item) => item.id === id);
       if (!milestone) {
-        return current;
+        return;
       }
 
-      const siblings = current
+      const siblings = milestones
         .filter((item) => item.goalId === milestone.goalId)
         .sort((a, b) => a.position - b.position);
 
@@ -273,25 +225,35 @@ export function GoalProvider({ children }: GoalProviderProps) {
       const swapWith = direction === "up" ? index - 1 : index + 1;
 
       if (swapWith < 0 || swapWith >= siblings.length) {
-        return current;
+        return;
       }
 
       const currentItem = siblings[index];
       const targetItem = siblings[swapWith];
 
-      return current.map((item) => {
-        if (item.id === currentItem.id) {
-          return { ...item, position: targetItem.position };
-        }
+      await milestoneRepository.swapMilestonePositions(
+        currentItem.id,
+        currentItem.position,
+        targetItem.id,
+        targetItem.position,
+      );
 
-        if (item.id === targetItem.id) {
-          return { ...item, position: currentItem.position };
-        }
+      setMilestones((current) =>
+        current.map((item) => {
+          if (item.id === currentItem.id) {
+            return { ...item, position: targetItem.position };
+          }
 
-        return item;
-      });
-    });
-  }, []);
+          if (item.id === targetItem.id) {
+            return { ...item, position: currentItem.position };
+          }
+
+          return item;
+        }),
+      );
+    },
+    [milestones],
+  );
 
   const getGoalById = useCallback(
     (id: string) => goals.find((goal) => goal.id === id),
@@ -325,9 +287,11 @@ export function GoalProvider({ children }: GoalProviderProps) {
     () => ({
       goals,
       milestones,
-      isReady,
-      storageCorrupt,
-      recoverStorage,
+      loading,
+      error,
+      isReady: !loading && error === null,
+      retry,
+      refresh,
       createGoal,
       updateGoal,
       setGoalStatus,
@@ -348,9 +312,10 @@ export function GoalProvider({ children }: GoalProviderProps) {
     [
       goals,
       milestones,
-      isReady,
-      storageCorrupt,
-      recoverStorage,
+      loading,
+      error,
+      retry,
+      refresh,
       createGoal,
       updateGoal,
       setGoalStatus,

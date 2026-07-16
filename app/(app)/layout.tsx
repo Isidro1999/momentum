@@ -3,8 +3,10 @@ import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { getCurrentUserProfile } from "@/lib/auth/profile";
+import { CategoryProvider } from "@/providers/category-provider";
 import { DailyReviewProvider } from "@/providers/daily-review-provider";
 import { GoalProvider } from "@/providers/goal-provider";
+import { MigrationProvider } from "@/providers/migration-provider";
 import { TaskProvider } from "@/providers/task-provider";
 
 export default async function PrivateAppLayout({
@@ -19,12 +21,16 @@ export default async function PrivateAppLayout({
   }
 
   return (
-    <TaskProvider>
-      <GoalProvider>
-        <DailyReviewProvider>
-          <AppShell userName={auth.displayName}>{children}</AppShell>
-        </DailyReviewProvider>
-      </GoalProvider>
-    </TaskProvider>
+    <CategoryProvider>
+      <TaskProvider>
+        <GoalProvider>
+          <DailyReviewProvider>
+            <MigrationProvider>
+              <AppShell userName={auth.displayName}>{children}</AppShell>
+            </MigrationProvider>
+          </DailyReviewProvider>
+        </GoalProvider>
+      </TaskProvider>
+    </CategoryProvider>
   );
 }

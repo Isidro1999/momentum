@@ -7,6 +7,12 @@ Validación manual breve antes de cada release. Probar en desktop (~1440px) y mo
 - [ ] `npx next build --webpack` termina sin errores.
 - [ ] No se usa Turbopack para el build de release.
 
+## Auth
+
+- [ ] Registro, login, logout y recuperación de contraseña.
+- [ ] Rutas privadas redirigen a `/login` sin sesión.
+- [ ] Sesión se mantiene al recargar.
+
 ## Rutas
 
 - [ ] `/` Hoy
@@ -14,25 +20,26 @@ Validación manual breve antes de cada release. Probar en desktop (~1440px) y mo
 - [ ] `/objetivos` y `/objetivos/[id]`
 - [ ] `/bitacora` y `/bitacora/[date]`
 - [ ] `/progreso`
-- [ ] Calendario y Configuración se ven como “Pronto” (no rompen navegación).
+- [ ] Calendario y Configuración se ven como “Pronto”.
 
-## Tareas
+## Tareas (Supabase)
 
 - [ ] Crear, editar, eliminar (con confirmación).
 - [ ] Completar y volver a pendiente.
 - [ ] En progreso, postergar, cancelar / reactivar.
 - [ ] Buscar y filtrar; empty state distinto si no hay datos vs sin resultados.
 - [ ] Asignar objetivo y verlo en detalle del objetivo.
-- [ ] Reflejo en Hoy y persistencia al recargar.
+- [ ] Reflejo en Hoy y persistencia al recargar (datos en Supabase).
 
-## Objetivos
+## Objetivos (Supabase)
 
 - [ ] Crear, editar, pausar/reactivar, completar, cancelar, eliminar.
 - [ ] Hitos: crear, editar, completar, reordenar, eliminar.
 - [ ] Progreso coherente con el modo elegido.
+- [ ] Al eliminar objetivo: hitos se borran; tareas quedan con `goal_id` null.
 - [ ] Reflejo en Hoy y Progreso.
 
-## Bitácora
+## Bitácora (Supabase)
 
 - [ ] Registrar hoy; editar el registro de hoy.
 - [ ] Registrar un día anterior; rechazo de fechas futuras.
@@ -48,13 +55,27 @@ Validación manual breve antes de cada release. Probar en desktop (~1440px) y mo
 - [ ] Gráficos legibles en desktop y mobile.
 - [ ] Insights coherentes con datos reales.
 
-## Fechas y localStorage
+## Migración localStorage → Supabase
+
+- [ ] Con datos locales y `local_storage_migrated_at` null: aparece el banner de importación.
+- [ ] “Omitir por ahora” no importa ni marca migración.
+- [ ] “Importar ahora” crea filas en Supabase y muestra resumen.
+- [ ] Reintentar no duplica (usa `local_source_id`).
+- [ ] Tras éxito: se puede “Eliminar datos locales” con confirmación.
+- [ ] Logout no borra localStorage.
+- [ ] En otro navegador (sin localStorage): se ven los datos de la cuenta.
+
+## Carga y errores
+
+- [ ] Mientras carga: skeleton / loading, sin empty state falso.
+- [ ] Error de red: mensaje claro + Reintentar.
+- [ ] Al cerrar sesión no quedan datos del usuario anterior en pantalla.
+
+## Fechas
 
 - [ ] Fechas en zona local (sin desfase UTC visible).
 - [ ] Formatos visibles en español donde aplica.
 - [ ] Recarga: sin hydration mismatch en consola.
-- [ ] Seeds solo si la clave estaba ausente.
-- [ ] Datos corruptos: banner de recuperación; no pisan otras claves.
 
 ## UI / a11y / responsive
 

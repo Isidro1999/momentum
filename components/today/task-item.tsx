@@ -37,10 +37,7 @@ export function TaskItem({ task }: TaskItemProps) {
   const isCompleted = task.status === "completada";
 
   function toggleComplete() {
-    setTaskStatus(
-      task.id,
-      isCompleted ? "pendiente" : "completada",
-    );
+    void setTaskStatus(task.id, isCompleted ? "pendiente" : "completada");
   }
 
   return (

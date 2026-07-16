@@ -1,8 +1,8 @@
 # Setup de Supabase (base inicial + autenticación)
 
-Esta guía configura el esquema y la autenticación de Momentum en Supabase **sin** migrar todavía tareas, objetivos ni bitácora fuera de `localStorage`.
+Esta guía configura el esquema y la autenticación de Momentum en Supabase, y la migración de datos desde `localStorage`.
 
-La ruta `/supabase-check` es **temporal** y no está en la navegación.
+**Fuente de verdad actual:** Supabase. localStorage solo se usa para detectar/importar datos previos.
 
 ## Requisitos previos
 
@@ -209,13 +209,60 @@ Esperado:
 - `.env.local` aparece como ignorado.
 - `.env.local.example` puede trackearse (sin valores secretos).
 
+## 15. Migración SQL `002` (IDs de importación local)
+
+Después de `001_initial_schema.sql`, ejecutá:
+
+1. Abrí `supabase/migrations/002_local_migration_ids.sql`.
+2. Copiá y ejecutá en SQL Editor.
+3. Verificá columnas:
+
+```sql
+SELECT column_name
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name IN ('tasks', 'goals', 'milestones', 'daily_reviews')
+  AND column_name = 'local_source_id';
+ORDER BY table_name;
+```
+
+Deben existir 4 columnas `local_source_id` e índices únicos parciales `(user_id, local_source_id)`.
+
+**No re-ejecutes `001` si ya corrió.** Usá solo migraciones nuevas.
+
+## 16. Probar importación desde localStorage
+
+1. (Opcional) En un navegador con datos viejos de Momentum, iniciá sesión.
+2. Si `profiles.local_storage_migrated_at` es null y hay claves `momentum.*.v1`, aparece el banner.
+3. Elegí **Importar ahora** o **Omitir por ahora**.
+4. Tras importar, revisá el resumen (importados / omitidos / errores).
+5. En Table Editor confirmá filas con `local_source_id` igual al id local.
+6. Reintentá la importación: no deben duplicarse (se omiten por `local_source_id`).
+7. Tras éxito: **Eliminar datos locales** (pide confirmación). No se borra al cerrar sesión.
+
+## 17. Validar desde otro navegador
+
+1. Creá/editá tareas, objetivos y bitácora en el navegador A.
+2. Abrí Momentum en el navegador B (u otro perfil) con la misma cuenta.
+3. Los datos deben coincidir (fuente: Supabase).
+4. El banner de importación no debería aparecer si ya migraste o no hay datos locales.
+
+## 18. Comprobar duplicados
+
+```sql
+SELECT user_id, local_source_id, count(*)
+FROM public.tasks
+WHERE local_source_id IS NOT NULL
+GROUP BY 1, 2
+HAVING count(*) > 1;
+```
+
+Repetí para `goals`, `milestones` y `daily_reviews`. El resultado debe estar vacío.
+
 ## Qué NO está implementado todavía
 
-- Repositorios / CRUD de tareas, objetivos, hitos y bitácora en Supabase
-- Migración desde `localStorage`
-- Cambio de providers de datos
 - Calendario
 - Configuración
 - IA / notificaciones / exportación
-
-La app autenticada sigue usando `localStorage` para los datos del día a día.
+- Realtime / offline mode
+- Retiro definitivo de las claves localStorage del código de importación

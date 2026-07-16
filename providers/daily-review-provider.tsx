@@ -9,11 +9,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  loadDailyReviewsFromStorage,
-  saveDailyReviewsToStorage,
-} from "@/lib/daily-review-storage";
 import { getTodayDateString } from "@/lib/dates";
+import { toUserFacingError } from "@/lib/repositories/errors";
+import * as dailyReviewRepository from "@/lib/repositories/daily-review-repository";
 import type { DailyReview, DailyReviewInput } from "@/types";
 
 interface OpenFormOptions {
@@ -23,12 +21,14 @@ interface OpenFormOptions {
 
 interface DailyReviewContextValue {
   reviews: DailyReview[];
+  loading: boolean;
+  error: string | null;
   isReady: boolean;
-  storageCorrupt: boolean;
-  recoverStorage: () => void;
+  retry: () => void;
+  refresh: () => Promise<void>;
   getByDate: (date: string) => DailyReview | undefined;
-  upsertReview: (input: DailyReviewInput) => DailyReview;
-  deleteReview: (id: string) => void;
+  upsertReview: (input: DailyReviewInput) => Promise<DailyReview>;
+  deleteReview: (id: string) => Promise<void>;
   isFormOpen: boolean;
   formDate: string;
   formDateLocked: boolean;
@@ -40,122 +40,72 @@ interface DailyReviewContextValue {
 
 const DailyReviewContext = createContext<DailyReviewContextValue | null>(null);
 
-function createId(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return `review-${crypto.randomUUID()}`;
-  }
-
-  return `review-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
 interface DailyReviewProviderProps {
   children: ReactNode;
 }
 
 export function DailyReviewProvider({ children }: DailyReviewProviderProps) {
   const [reviews, setReviews] = useState<DailyReview[]>([]);
-  const [isReady, setIsReady] = useState(false);
-  const [canPersist, setCanPersist] = useState(false);
-  const [storageCorrupt, setStorageCorrupt] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formDate, setFormDate] = useState(getTodayDateString());
   const [formDateLocked, setFormDateLocked] = useState(false);
   const [editingReview, setEditingReview] = useState<DailyReview | null>(null);
 
-  useEffect(() => {
-    const stored = loadDailyReviewsFromStorage();
+  const loadReviews = useCallback(async () => {
+    setLoading(true);
+    setError(null);
 
-    if (stored.status === "missing") {
+    try {
+      const data = await dailyReviewRepository.listDailyReviews();
+      setReviews(data);
+    } catch (loadError) {
       setReviews([]);
-      setCanPersist(true);
-      setStorageCorrupt(false);
-    } else if (stored.status === "corrupt") {
-      setReviews([]);
-      setCanPersist(false);
-      setStorageCorrupt(true);
-    } else {
-      setReviews(stored.data);
-      setCanPersist(true);
-      setStorageCorrupt(false);
+      setError(toUserFacingError(loadError));
+    } finally {
+      setLoading(false);
     }
-
-    setIsReady(true);
   }, []);
 
   useEffect(() => {
-    if (!isReady || !canPersist) {
-      return;
-    }
+    void loadReviews();
+  }, [loadReviews, reloadKey]);
 
-    saveDailyReviewsToStorage(reviews);
-  }, [reviews, isReady, canPersist]);
-
-  const recoverStorage = useCallback(() => {
-    setReviews([]);
-    saveDailyReviewsToStorage([]);
-    setCanPersist(true);
-    setStorageCorrupt(false);
+  const retry = useCallback(() => {
+    setReloadKey((current) => current + 1);
   }, []);
+
+  const refresh = useCallback(async () => {
+    await loadReviews();
+  }, [loadReviews]);
 
   const getByDate = useCallback(
     (date: string) => reviews.find((review) => review.date === date),
     [reviews],
   );
 
-  const upsertReview = useCallback((input: DailyReviewInput): DailyReview => {
-    const now = new Date().toISOString();
-    let result: DailyReview | null = null;
+  const upsertReview = useCallback(
+    async (input: DailyReviewInput): Promise<DailyReview> => {
+      const saved = await dailyReviewRepository.upsertDailyReview(input);
+      setReviews((current) => {
+        const exists = current.some((review) => review.id === saved.id);
+        if (exists) {
+          return current.map((review) =>
+            review.id === saved.id ? saved : review,
+          );
+        }
 
-    setReviews((current) => {
-      const existing = current.find((review) => review.date === input.date);
-      const baseFields = {
-        date: input.date,
-        mood: input.mood,
-        energy: input.energy,
-        stress: input.stress,
-        productivity: input.productivity,
-        sleepHours: input.sleepHours,
-        trained: input.trained,
-        studied: input.studied,
-        jobSearchProgress: input.jobSearchProgress,
-        ifedelProgress: input.ifedelProgress,
-        wentWell: input.wentWell.trim(),
-        difficulties: input.difficulties.trim(),
-        dailyWin: input.dailyWin.trim(),
-        learning: input.learning.trim(),
-        tomorrowPriority: input.tomorrowPriority.trim(),
-        notes: input.notes?.trim() || undefined,
-        updatedAt: now,
-      };
+        return [saved, ...current.filter((review) => review.date !== saved.date)];
+      });
+      return saved;
+    },
+    [],
+  );
 
-      if (existing) {
-        const updated: DailyReview = {
-          ...existing,
-          ...baseFields,
-        };
-        result = updated;
-        return current.map((review) =>
-          review.id === existing.id ? updated : review,
-        );
-      }
-
-      const created: DailyReview = {
-        id: createId(),
-        ...baseFields,
-        createdAt: now,
-      };
-      result = created;
-      return [created, ...current];
-    });
-
-    if (!result) {
-      throw new Error("No se pudo guardar el registro diario");
-    }
-
-    return result;
-  }, []);
-
-  const deleteReview = useCallback((id: string) => {
+  const deleteReview = useCallback(async (id: string) => {
+    await dailyReviewRepository.deleteDailyReview(id);
     setReviews((current) => current.filter((review) => review.id !== id));
   }, []);
 
@@ -188,9 +138,11 @@ export function DailyReviewProvider({ children }: DailyReviewProviderProps) {
   const value = useMemo(
     () => ({
       reviews,
-      isReady,
-      storageCorrupt,
-      recoverStorage,
+      loading,
+      error,
+      isReady: !loading && error === null,
+      retry,
+      refresh,
       getByDate,
       upsertReview,
       deleteReview,
@@ -204,9 +156,10 @@ export function DailyReviewProvider({ children }: DailyReviewProviderProps) {
     }),
     [
       reviews,
-      isReady,
-      storageCorrupt,
-      recoverStorage,
+      loading,
+      error,
+      retry,
+      refresh,
       getByDate,
       upsertReview,
       deleteReview,

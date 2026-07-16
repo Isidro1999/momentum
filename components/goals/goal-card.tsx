@@ -41,7 +41,7 @@ export function GoalCard({ goal }: GoalCardProps) {
       return;
     }
 
-    deleteGoal(goal.id);
+    void deleteGoal(goal.id);
     unlinkGoalFromTasks(goal.id);
   }
 
@@ -50,7 +50,7 @@ export function GoalCard({ goal }: GoalCardProps) {
       `¿Marcar “${goal.title}” como completado?`,
     );
     if (confirmed) {
-      setGoalStatus(goal.id, "completado");
+      void setGoalStatus(goal.id, "completado");
     }
   }
 
@@ -59,7 +59,7 @@ export function GoalCard({ goal }: GoalCardProps) {
       `¿Cancelar el objetivo “${goal.title}”? Podés dejarlo como referencia.`,
     );
     if (confirmed) {
-      setGoalStatus(goal.id, "cancelado");
+      void setGoalStatus(goal.id, "cancelado");
     }
   }
 
@@ -130,7 +130,7 @@ export function GoalCard({ goal }: GoalCardProps) {
         {goal.status === "activo" ? (
           <button
             type="button"
-            onClick={() => setGoalStatus(goal.id, "pausado")}
+            onClick={() => void setGoalStatus(goal.id, "pausado")}
             className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
           >
             Pausar
@@ -140,7 +140,7 @@ export function GoalCard({ goal }: GoalCardProps) {
         {goal.status === "pausado" ? (
           <button
             type="button"
-            onClick={() => setGoalStatus(goal.id, "activo")}
+            onClick={() => void setGoalStatus(goal.id, "activo")}
             className="rounded-lg bg-teal-50 px-2.5 py-1.5 text-xs font-medium text-teal-800 hover:bg-teal-100"
           >
             Reactivar

@@ -41,105 +41,70 @@ Actualmente divide su tiempo entre:
 | Objetivos | `/objetivos`, `/objetivos/[id]` | Implementado |
 | Bitácora | `/bitacora`, `/bitacora/[date]` | Implementado |
 | Progreso | `/progreso` | Implementado |
+| Auth | `/login`, `/registro`, recuperación | Implementado |
 | Calendario | — | Pendiente (nav marcada “Pronto”) |
 | Configuración | — | Pendiente (nav marcada “Pronto”) |
 
-### Persistencia local
+### Persistencia
 
-Sin backend. Los datos viven en `localStorage` con claves versionadas:
+**Fuente principal:** Supabase (tablas `categories`, `tasks`, `goals`, `milestones`, `daily_reviews`) con RLS por usuario.
 
-| Clave | Contenido |
-|-------|-----------|
-| `momentum.tasks.v1` | Tareas |
-| `momentum.goals.v1` | Objetivos + hitos |
-| `momentum.dailyReviews.v1` | Cierres / bitácora diaria |
+**localStorage:** solo como respaldo temporal para detectar e importar datos previos (`momentum.tasks.v1`, `momentum.goals.v1`, `momentum.dailyReviews.v1`). Tras migrar providers, la app **no escribe** datos nuevos en localStorage.
 
-Comportamiento de carga:
+Importación opcional (una vez por usuario, vía `profiles.local_storage_migrated_at`):
 
-- `missing`: se insertan seeds (tareas y objetivos) una sola vez; bitácora inicia vacía.
-- `ok`: se cargan los datos válidos.
-- `corrupt`: no se sobrescribe; UI muestra banner de recuperación; `canPersist` queda en false hasta recuperar.
-- `JSON.parse` fallido → fallback seguro (`corrupt`), sin romper la app.
+1. Si hay datos locales y la cuenta aún no migró → banner para importar u omitir.
+2. Orden: categorías (ya seed) → objetivos → hitos → tareas → bitácora.
+3. Idempotencia con `local_source_id` (migración SQL `002`).
+4. Tras éxito: opción de eliminar la copia local (con confirmación).
 
 ### Arquitectura
 
 - Next.js App Router + TypeScript + Tailwind CSS 4.
-- Providers en cliente: `TaskProvider`, `GoalProvider`, `DailyReviewProvider`.
-- Hooks: `useTasks`, `useGoals`, `useDailyReviews`.
-- Capa de storage: `lib/*-storage.ts` + `lib/storage.ts` (`safeJsonParse`, `safeLocalStorageSet`).
-- Fechas locales: `lib/dates.ts` (`getTodayDateString`, `isValidDateString`, `isoToLocalDateString`, saludo por hora).
-- Analytics de Progreso: `lib/analytics/*` (lectura; no inventa métricas sin datos).
+- Auth: Supabase Auth + `proxy.ts` (sesión SSR).
+- Providers: `CategoryProvider`, `TaskProvider`, `GoalProvider`, `DailyReviewProvider`, `MigrationProvider`.
+- Repositorios: `lib/repositories/*` (mapeo dominio ES ↔ DB EN).
+- Hooks: `useTasks`, `useGoals`, `useDailyReviews`, `useCategories`, `useMigration`.
+- Fechas locales: `lib/dates.ts`.
+- Analytics de Progreso: `lib/analytics/*`.
 - Layout: sidebar desktop + navegación inferior mobile (`AppShell`).
-- Modales globales de tarea, objetivo y cierre diario.
 
 ### Funcionalidades por módulo
 
 **Hoy**
 
-- Saludo por hora, fecha local en español.
-- Prioridad del día derivada de tareas pendientes (fallback al cierre / mensaje genérico).
-- Lista de tareas de hoy con completar/editar.
-- Progreso diario, objetivos activos destacados, bienestar desde el cierre.
+- Saludo con nombre del profile.
+- Prioridad del día, tareas de hoy, progreso, objetivos activos, bienestar.
 - CTA de cierre del día.
-- Bloque “Próximo evento” marcado como pronto (Calendario aún no existe).
+- Bloque “Próximo evento” marcado como pronto.
 
-**Tareas**
+**Tareas / Objetivos / Bitácora / Progreso**
 
-- CRUD, estados (pendiente, en progreso, completada, postergada, cancelada).
-- Buscar, filtrar por alcance/estado/categoría/prioridad/objetivo.
-- Persistencia y reflejo en Hoy / Objetivos / Progreso.
-
-**Objetivos**
-
-- CRUD, pausar/reactivar, completar, cancelar, eliminar (con confirmación).
-- Hitos: crear, editar, completar, eliminar, reordenar.
-- Progreso por modo (manual / hitos / tareas).
-- Relación con tareas.
-
-**Bitácora**
-
-- Registrar/editar por fecha (sin fechas futuras ni duplicados por día).
-- Listado con búsqueda y períodos; detalle por fecha.
-- Escalas 1–10 + reflexión + flags de actividades.
-
-**Progreso**
-
-- Períodos: 7d, 30d, 3m, mes.
-- Métricas, gráficos Recharts, insights solo con datos reales.
-- Estados vacíos cuando no hay suficiente información.
+- CRUD completo contra Supabase.
+- Misma UI y filtros que el MVP local.
+- Loading / error / retry sin flashes de empty state.
 
 ## Principios de experiencia
 
-- La aplicación debe ser clara y tranquila.
-- Debe evitar la sobrecarga visual.
-- Debe funcionar correctamente en desktop y mobile.
+- Clara y tranquila; desktop y mobile.
 - Completar tareas debe sentirse satisfactorio.
-- Las tareas postergadas no deben mostrarse como fracasos.
-- Los gráficos deben ayudar a comprender patrones.
-- El registro diario no debería tomar más de cuatro minutos.
+- Postergadas no son fracasos.
+- Registro diario ≤ cuatro minutos.
 
 ## Stack
 
-- Next.js (App Router).
-- TypeScript.
-- Tailwind CSS.
-- Lucide Icons.
-- Recharts.
-- date-fns.
-- Supabase en una etapa posterior.
+- Next.js (App Router), TypeScript, Tailwind CSS, Lucide, Recharts, date-fns.
+- Supabase (Auth + Postgres + RLS).
 - Vercel para publicación.
 
-## Pendiente (fuera del MVP actual)
+## Pendiente
 
-- Calendario y próximos eventos reales.
-- Supabase / sync / multi-dispositivo.
-- Login y cuentas.
-- Notificaciones.
-- Inteligencia artificial.
-- Exportación de datos.
-- Configuración de perfil y preferencias.
-- Nuevos módulos o gráficos adicionales.
+- Calendario y eventos reales.
+- Configuración de perfil.
+- Notificaciones, IA, exportación.
+- Offline / realtime.
+- Retirar por completo el respaldo localStorage.
 
 ## Checklist de release
 
-Ver `docs/qa-checklist.md` para la validación manual antes de cada release.
+Ver `docs/qa-checklist.md`.
